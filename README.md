@@ -26,10 +26,11 @@ MongoDB
 Multer (for handling file uploads)
 pdf-parse (for extracting text from PDF files)
 Axios (for interacting with the Gemini API)
+
 Frontend
 Angular (for UI and logic)
 Bootstrap (for responsive and clean styling)
-=======
+
 # ChatApp
 
 This project was generated with [Angular CLI](https://github.com/angular/angular-cli) version 16.2.0.
