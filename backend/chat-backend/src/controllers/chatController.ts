@@ -1,31 +1,41 @@
 import { Request, Response } from 'express';
 import { extractTextFromPDF } from '../utils/pdfUtils';
 import { sendEventsToClients } from '../utils/sseUtils';
-import { generateResponse } from '../services/geminiService';
+import { fetchProducts, generateResponse, searchProduct } from '../services/geminiService';
 import { Chat } from '../models/models';
 
-export const sendMessage = async (req: Request, res: Response) => {
+export const sendMessage = async (req: Request, res: Response): Promise<void> => {
   const { userId, message } = req.body;
   const file = req.file;
 
   try {
-    let extractedText = '';
-    if (file) {
-      extractedText = await extractTextFromPDF(file.path);
+    // Fetch product data
+    const products = await fetchProducts();
+    const matchedProduct = searchProduct(message, products);
+
+    let context = '';
+    if (matchedProduct) {
+      context = `Product: ${matchedProduct.title}\nDescription: ${matchedProduct.description}\nPrice: ${matchedProduct.price}\nCategory: ${matchedProduct.category}`;
+    } else if (file) {
+      context = await extractTextFromPDF(file.path);
     }
 
-    const combinedMessage = extractedText ? `${message} ${extractedText}` : message;
-    const responseText = await generateResponse(combinedMessage);
+    if (!context) {
+      res.status(404).json({ error: 'No relevant data found for the query' });
+      return; // Explicit return to prevent further execution
+    }
 
-    const newChat = new Chat({ userId, message: combinedMessage, response: responseText });
+    // Generate a response using Gemini
+    const responseText = await generateResponse(`${message}\nContext:\n${context}`);
+
+    // Save the interaction in the database
+    const newChat = new Chat({ userId, message, context, response: responseText });
     await newChat.save();
 
-    const replyMessage = { userId, message: combinedMessage, response: responseText };
-    sendEventsToClients(replyMessage);
-
+    // Send the response
     res.json({ reply: responseText });
   } catch (error) {
-    console.error('Error processing chat:', error);
+    console.error('Error processing query:', error);
     res.status(500).json({ error: 'Error processing the request' });
   }
 };

@@ -45,13 +45,14 @@ export class ChatComponent implements OnInit{
           this.messages.push({
             userId:'user123',
             message:this.userMessage,
-            response:response.reply
+            response:response.reply || response.error
           })
           this.userMessage = '';   
 
         console.log(this.messages)
         this.selectedFile = null;
-      });
+      })
+ 
     }
   }
 
