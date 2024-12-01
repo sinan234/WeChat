@@ -22,17 +22,14 @@ export const sendMessage = async (req: Request, res: Response): Promise<void> =>
 
     if (!context) {
       res.status(404).json({ error: 'No relevant data found for the query' });
-      return; // Explicit return to prevent further execution
+      return; 
     }
 
-    // Generate a response using Gemini
     const responseText = await generateResponse(`${message}\nContext:\n${context}`);
 
-    // Save the interaction in the database
     const newChat = new Chat({ userId, message, context, response: responseText });
     await newChat.save();
 
-    // Send the response
     res.json({ reply: responseText });
   } catch (error) {
     console.error('Error processing query:', error);
