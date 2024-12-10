@@ -1,41 +1,53 @@
 import { Request, Response } from 'express';
 import { extractTextFromPDF } from '../utils/pdfUtils';
 import { sendEventsToClients } from '../utils/sseUtils';
-import { fetchProducts, generateResponse, searchProduct } from '../services/geminiService';
+import {  fetchProducts, searchProduct } from '../services/productService';
 import { Chat } from '../models/models';
+import { RagService } from '../services/ragService';
 
 export const sendMessage = async (req: Request, res: Response): Promise<void> => {
   const { userId, message } = req.body;
   const file = req.file;
-
   try {
-    // Fetch product data
-    const products = await fetchProducts();
-    const matchedProduct = searchProduct(message, products);
-
     let context = '';
-    if (matchedProduct) {
-      context = `Product: ${matchedProduct.title}\nDescription: ${matchedProduct.description}\nPrice: ${matchedProduct.price}\nCategory: ${matchedProduct.category}`;
-    } else if (file) {
-      context = await extractTextFromPDF(file.path);
+
+    if (file) {
+      const ragSystem = new RagService();
+
+      context = await ragSystem.processQuery(file.path, message);   
+      console.log("context",context)
+    } else {
+      const products = await fetchProducts();
+
+      const matchedProduct = searchProduct(message, products);
+
+      if (matchedProduct) {
+       context = `Product: ${matchedProduct.title}\nDescription: ${matchedProduct.description}\nPrice: ${matchedProduct.price}\nCategory: ${matchedProduct.category}`;
+     }
     }
 
     if (!context) {
       res.status(404).json({ error: 'No relevant data found for the query' });
-      return; 
+      return;
     }
 
-    const responseText = await generateResponse(`${message}\nContext:\n${context}`);
 
-    const newChat = new Chat({ userId, message, context, response: responseText });
+    const newChat = new Chat({
+      userId,
+      message,
+      context,
+      response:  context,
+    });
+    
     await newChat.save();
 
-    res.json({ reply: responseText });
+    res.json({ reply: context });
   } catch (error) {
     console.error('Error processing query:', error);
-    res.status(500).json({ error: 'Error processing the request' });
+    res.status(500).json({ error: 'No data relevant for your query' });
   }
 };
+
 
 export const getChatHistory = async (req: Request, res: Response) => {
   res.setHeader('Content-Type', 'text/event-stream');
